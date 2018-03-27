@@ -1,0 +1,269 @@
+---
+title: "Design an A/B Test"
+author: "Matthew Murphy"
+date: "3/25/2018"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Overview
+
+>The hypothesis behind the experiment was that this might set clearer expectations to the students, reducing the amount of frustrated students who left the free trial because they did not have enough time and at the same time not reducing significantly the number of students who stay enrolled and complete the course. If the hypothesis turns out to be true, then the overall student experience could improve because coaches would be able to better support the students which will complete the course.
+
+## Experiment Design
+
+### Metric Choice
+
+#### Invariant metrics:
+  1. **Number of cookies**: The unit of diversion for the A/B test. Because the visit to the overview page occurs before the experiment, this metric is independent of the experiment and should be evenly distributed between the control and experiment group.
+
+  2. **Number of clicks**: This metric is independent of the experiment since users click before the trial pops up.  it should be evenly distributed between the control and experiment groups.
+
+  3. **Click-through-probability**: This is a ratio of the above metrics. As they are both independent, this is also independent and should be evenly distributed between the groups.
+
+#### Evaluation metrics:
+
+  1. **Gross conversion**: Gross conversion tells us the percentage of students that enroll on the course after clicking the "Start free trial button". This is a good metric because it allows us to measure the effect of the experiment screener on the enrolling. If our hypothesis turns out to be true, we expect the gross conversion to decrease, as students deterred by the screener are unlikely to make a payment and complete the course.
+
+  2. **Net conversion**: Net conversion tells us which students stay enrolled and end up making at least one payment. Ideally, we would like to keep the same or increase the proportion of students that stay enrolled and pay.
+
+
+#### Unused metrics:
+
+  1. **Number of user-ids**: This is not a good metric because it can change due to influences not related to the experiment.  We would also expect it to be reduced as a result of the experiment.
+
+  2. **Retention**: This can tell us exact proportion of students who enroll.  However, we would need a much ligher amount of pageviews to compute this metric, and that would make the exposure time too long for our goals.
+
+
+### Measuring Standard Deviation
+
+Let's calculate the standard deviation for gross conversion and net conversion.  Since both are both probabilities, we can assume a binomial distribution, which will take on a normal distribution for a large enough sample size.
+
+The baseline values can be [found here](https://docs.google.com/spreadsheets/d/1MYNUtC47Pg8hdoCjOXaHqF-thheGpUshrFA21BAJnNc/edit#gid=0).
+
+For a sample size of 5000 cookies visiting the course overview page, the number of cookies we expect to click on the "Start Free Trial" would be:
+
+```
+N = 5000 * 3200/40000
+N = 400
+```
+
+Then, the Standard Errors for 5000 pageviews will be:
+
+```
+Gross Conversion -> 0.0202
+Net Conversion ->   0.0156
+```
+
+### Sizing
+
+#### Number of Samples vs Power
+
+With multiple tests being done, the chance of a rare event in the confidence interval increases. The Bonferroni correction compensates for that increase, but at the cost of increasing the probability of producing false positives.  Thus, I have elected not to use it for this experiment.
+
+I used this [online calculator](http://www.evanmiller.org/ab-testing/sample-size.html) to calculate how large our sample size needs to be:
+
+Gross Conversion:
+```
+    Base conversion rate = 20.625%
+    Practical significance boundary = 1%
+    Sample size: 25,835
+```
+
+Net Conversion:
+```
+    Base conversion rate = 10.93125%
+    Practical significance boundary = 0.75%
+    Sample size: 27,413
+```
+
+The sample size for net conversion is larger than gross conversion, so we will use that.  The click-through-probability on the "Start Free Trial" button is `0.08. We need to calculate the total number of pageviews per group, and then double that to get the total pageviews for both groups (control and experiment):
+
+**Pageviews (per group)**
+```
+ 27413 / 0.08  = 342,662.5
+```
+
+**Total pageviews**
+```
+342662.5 * 2 = 685,325
+```
+
+#### Duration vs Exposure
+
+With 40,000 unique cookies that view the course overview page each day, I would divert 75% of that traffic (30,000 cookies) towards the experiment. Our A/B Test needs a total of 685,325 pageviews, and does not pose much risk.  This would mean the experiment will last roughly 23 days.
+
+This is low risk because the enrolling process for the free trial existed previously. Currently, only 8% of unique cookies that visit are clicking "Start free trial".  We are only exposing a small percentage of users to this change.
+
+
+## Experiment Analysis
+
+### Sanity Checks
+
+Let's see if our invariant metrics are unchanged for both the control and experiment groups. 
+
+Number of cookies:
+```
+    Total control pageviews : 345543
+    Total experiment pageviews : 344660
+    Total pageviews : 690203
+    Expected probability : 0.5
+```
+
+Number of clicks:
+```
+    Total control clicks : 28378
+    Total experiment clicks : 28325
+    Total clicks : 56703
+    Expected probability : 0.5
+```
+
+Click-through-probability:
+```
+    Observed (control) : 0.082126
+    Observed (experiment) : 0.082182
+    Pooled : 0.082154
+```
+
+Now let's check the confidence intervals (95%)
+
+Number of cookies:
+```
+    Confidence interval : [0.4988, 0.5012]
+    Observed value : 0.5006
+    Passed? : YES
+```
+
+Number of clicks:
+```
+    Confidence interval : [0.4959, 0.5041]
+    Observed value : 0.5005
+    Passed? : YES
+```
+
+Click-through-probability:
+```
+    Confidence interval (of diff.) : [-0.001296, 0.001296]
+    Observed difference : 0.00005663
+    Passed? : YES
+```
+
+All three Sanity Checks have passed.
+
+### Result Analysis
+
+#### Effect Size Test
+
+The sanity checks passed, but we need to determine if our evaluation metrics are statistically and practically significant.
+
+Gross Conversion:
+```
+    Total clicks (control) : 17293
+    Total clicks (experiment) : 17260
+    Total enrollments (control) :  3785
+    Total enrollments (experiment) :  3423
+```
+
+Net Conversion:
+```
+    Total clicks (control).......... 17293
+    Total clicks (experiment)....... 17260
+    Total payments (control)........  2033
+    Total payments (experiment).....  1945
+```
+
+We will not evaluate confidence intervals (95%)
+
+Gross Conversion:
+```
+    Control rate : 0.2189
+    Experiment Rate : 0.1983
+    Rate diff. (exp. - control) : -0.02055
+    Pooled rate : 0.2086
+    Pooled standard deviation : 0.004372
+    
+    Confidence interval : [-0.02912, -0.01199]
+    Practical significance boundary : 0.01
+    
+    Statistically significant? YES
+    Practically significant?  YES
+```
+
+Net Conversion:
+```
+    Control Rate : 0.1176
+    Experiment Rate : 0.1127
+    Rate diff. (exp. - control) : -0.004874
+    Pooled rate : 0.1151
+    Pooled standard deviation : 0.003434
+    
+    Confidence interval : [-0.01160, 0.001857]
+    Practical significance boundary : 0.0075
+    
+    Statistically significant? NO 
+    Practically significant? NO
+```
+
+For Gross Conversion, we see a statistically significant and practically significant decrease, which is what we wanted. Zero is not a part of the confidence interval, and the upper bound is past the practical significance boundary. So Gross Conversion has PASSED.
+
+For Net Conversion, we wanted to see an increase or staying relatively the same. The calculations show that there is no statistical significant difference in net conversion, however the lower bound of the 95% confidence interval is past the boundary for practical significance. This means that any interpretation of the data will be uncertain, and we do not have enough statistical power to draw a strong conclusion.
+
+#### Sign Tests
+
+Gross Conversion:
+```
+    Number of successes.............  4
+    Number of trials................ 23
+    Probability..................... 0.5
+    Two-tailed p-value.............. 0.0026
+    Statistically significant?...... YES
+```
+
+Net Conversion:
+```
+    Number of successes............. 10
+    Number of trials................ 23
+    Probability..................... 0.5
+    Two-tailed p-value.............. 0.6776
+    Statistically significant?...... NO
+```
+
+#### Summary
+
+The Bonferroni correction was not used because we want both the evaluation metrics to pass and it is not as effective in reducing Type II errors.
+
+The results of both our hypothesis tests and sign tests align. Gross conversion has showing to be statistically significant, but net conversion is not.   Both tests also show that gross conversion is practically significant, but net conversion is not, which is due to the lower bound of the 95% confidence interval being pas the boundary for practical significance.
+
+### Recommendation
+
+Looking back at the hypothesis:
+
+>The hypothesis behind the experiment was that this might set clearer expectations to the students, reducing the amount of frustrated students who left the free trial because they did not have enough time and at the same time not reducing significantly the number of students who stay enrolled and complete the course. If the hypothesis turns out to be true, then the overall student experience could improve because coaches would be able to better support the students which will complete the course.
+
+The gross conversion rate was reduced, but net conversion stayed roughly the same.  It did reduce the amount of frustrated students which means that goal was achieved.  Another goal was to keep the net conversion about the same (or better).  However, net conversion was practically insignificant in this experiment, making the results inconclusive.  I would recommend **not to launch**. and instead conduct further experiments and gain more data about the  net conversion rate.
+
+
+## Follow-Up Experiment
+
+For a follow-up, I would try reducing the number of frustrated students by increasing communications with students in the free trial period.  I would look to send an email after the first week that checks in with the student and attempts to guage progress as well as offering tips and advice.  
+
+
+**Hypothesis**: If students are encouraged, offered support and present options they will become more engaged and work through any difficulties.
+
+**Unit of Diversion**: User-Id. This change only impacts those who have enrolled in the program and subsequently made an account.
+
+**Invariant Metrics**: Number of User-Ids. This should not change over both the control and experiment groups as there is nothing that is affecting their enrollment into the program.
+
+**Evaluation Metrics**: 
+* Retention: The goal for this experiment would be to increase this number.
+
+## References
+* https://en.wikipedia.org/wiki/Bonferroni_correction
+* https://www.symbolab.com/solver/standard-deviation-calculator
+* https://www.evanmiller.org/ab-testing/sample-size.html
+* https://www.graphpad.com/quickcalcs/pvalue1.cfm
+
